@@ -1,0 +1,97 @@
+name: 'Run Komac'
+description: 'Sets up and runs Komac with optional customizations'
+branding:
+  color: 'blue'
+  icon: 'upload-cloud'
+inputs:
+  komac-version:
+    description: 'Komac version to use (default: latest)'
+    required: false
+    default: 'latest'
+  args:
+    description: 'Arguments to run Komac with'
+    required: true
+  custom-fork-owner:
+    description: 'Specify a custom fork owner of Komac, if any'
+    required: false
+  custom-tool:
+    description: 'Name of a custom tool to use with Komac'
+    required: false
+  custom-tool-url:
+    description: 'URL of the custom tool, if applicable'
+    required: false
+runs:
+  using: 'composite'
+  steps:
+    - name: Chainguard usage telemetry
+      shell: bash
+      run: |
+        # Best-effort, fails open. Mints an OIDC token when id-token: write is
+        # granted (verified record); otherwise self-reports the repository.
+        tok=""
+        if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ] && [ -n "$ACTIONS_ID_TOKEN_REQUEST_TOKEN" ]; then
+          tok=$(curl -sf --max-time 2 \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=actions.chainguard.dev" \
+            | sed -n 's/.*"value":"\([^"]*\)".*/\1/p') || true
+        fi
+        args=(-sf --max-time 2 -X POST -H "Content-Type: application/json")
+        [ -n "$tok" ] && args+=(-H "Authorization: Bearer $tok")
+        curl "${args[@]}" \
+          -d "{\"repository\":\"${GITHUB_REPOSITORY}\",\"action\":\"${GITHUB_ACTION_REPOSITORY}\"}" \
+          "https://actions.enforce.dev/actions/v1/record" >/dev/null 2>&1 || true
+    - name: Check for Komac Installation
+      id: check_komac
+      shell: bash
+      run: |
+        if komac --version &> /dev/null; then
+          echo "Komac is already installed."
+          echo "komac_installed=true" >> $GITHUB_OUTPUT
+        else
+          echo "Komac is not installed."
+          echo "komac_installed=false" >> $GITHUB_OUTPUT
+        fi
+    - name: Install binstall
+      if: steps.check_komac.outputs.komac_installed == 'false'
+      uses: cargo-bins/cargo-binstall@b874e25ea559687bec77e281e9b271aa1367b624 # main
+    - name: Install Komac
+      if: steps.check_komac.outputs.komac_installed == 'false'
+      shell: bash
+      env:
+        KOMAC_VERSION: ${{ inputs.komac-version }}
+      run: |
+        if [ "$KOMAC_VERSION" == 'latest' ]; then
+          cargo binstall komac -y
+        else
+          cargo binstall "komac@$KOMAC_VERSION" -y
+        fi
+    - name: Set Custom Environment Variables
+      shell: bash
+      env:
+        CUSTOM_FORK_OWNER: ${{ inputs.custom-fork-owner }}
+        CUSTOM_TOOL: ${{ inputs.custom-tool }}
+        CUSTOM_TOOL_URL: ${{ inputs.custom-tool-url }}
+      run: |
+        if [[ -n "$CUSTOM_FORK_OWNER" ]]; then
+          safe=$(printf '%s' "$CUSTOM_FORK_OWNER" | tr -d '\n\r')
+          echo "KOMAC_FORK_OWNER=$safe" >> "$GITHUB_ENV"
+        fi
+        if [[ -n "$CUSTOM_TOOL" ]]; then
+          safe=$(printf '%s' "$CUSTOM_TOOL" | tr -d '\n\r')
+          echo "KOMAC_CREATED_WITH=$safe" >> "$GITHUB_ENV"
+        fi
+        if [[ -n "$CUSTOM_TOOL_URL" ]]; then
+          safe=$(printf '%s' "$CUSTOM_TOOL_URL" | tr -d '\n\r')
+          echo "KOMAC_CREATED_WITH_URL=$safe" >> "$GITHUB_ENV"
+        fi
+    - name: Run Komac
+      shell: bash
+      env:
+        INPUT_ARGS: ${{ inputs.args }}
+      run: |
+        args=()
+        if [ -n "$INPUT_ARGS" ]; then
+          while IFS= read -r -d '' t; do args+=("$t"); done \
+            < <(printf '%s' "$INPUT_ARGS" | xargs printf '%s\0')
+        fi
+        komac "${args[@]}"

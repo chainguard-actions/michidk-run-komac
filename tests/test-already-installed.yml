@@ -1,0 +1,37 @@
+name: Test skip install when komac already installed
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Pre-install a stub komac so the action detects it as already installed
+      # and skips the cargo-binstall installation steps.
+      - name: Install stub komac
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          cat > "$HOME/.local/bin/komac" << 'EOF'
+          #!/bin/sh
+          echo "stub komac $@"
+          exit 0
+          EOF
+          chmod +x "$HOME/.local/bin/komac"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - id: action
+        uses: .
+        with:
+          args: --version
+
+      - name: Assert action succeeded (stub komac was detected and used)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: expected action to succeed when komac is pre-installed, got '$OUTCOME'"
+            exit 1
+          fi
+          echo "PASS: action succeeded using pre-installed stub komac"

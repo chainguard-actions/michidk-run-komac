@@ -1,0 +1,59 @@
+name: Test no custom env vars when inputs not provided
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Pre-install a stub komac so the action skips installation
+      - name: Install stub komac
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          cat > "$HOME/.local/bin/komac" << 'EOF'
+          #!/bin/sh
+          echo "stub komac $@"
+          exit 0
+          EOF
+          chmod +x "$HOME/.local/bin/komac"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - id: action
+        uses: .
+        with:
+          args: --version
+          # custom-fork-owner, custom-tool, custom-tool-url are intentionally omitted
+
+      - name: Assert KOMAC_FORK_OWNER is not set
+        env:
+          ACTUAL: ${{ env.KOMAC_FORK_OWNER }}
+        run: |
+          echo "KOMAC_FORK_OWNER: '$ACTUAL'"
+          if [ -n "$ACTUAL" ]; then
+            echo "FAIL: expected KOMAC_FORK_OWNER to be empty, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: KOMAC_FORK_OWNER is not set"
+
+      - name: Assert KOMAC_CREATED_WITH is not set
+        env:
+          ACTUAL: ${{ env.KOMAC_CREATED_WITH }}
+        run: |
+          echo "KOMAC_CREATED_WITH: '$ACTUAL'"
+          if [ -n "$ACTUAL" ]; then
+            echo "FAIL: expected KOMAC_CREATED_WITH to be empty, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: KOMAC_CREATED_WITH is not set"
+
+      - name: Assert KOMAC_CREATED_WITH_URL is not set
+        env:
+          ACTUAL: ${{ env.KOMAC_CREATED_WITH_URL }}
+        run: |
+          echo "KOMAC_CREATED_WITH_URL: '$ACTUAL'"
+          if [ -n "$ACTUAL" ]; then
+            echo "FAIL: expected KOMAC_CREATED_WITH_URL to be empty, got '$ACTUAL'"
+            exit 1
+          fi
+          echo "PASS: KOMAC_CREATED_WITH_URL is not set"
