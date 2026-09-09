@@ -9,6 +9,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | Version | Tag | Upstream commit |
 |---------|-----|-----------------|
 | v2 | [`v2`](https://github.com/chainguard-actions/michidk-run-komac/tree/v2) | [`b5627ea`](https://github.com/michidk/run-komac/commit/b5627eaf2c8b839aa3be7580be1e2e5b72c13f91) |
+| v2.1.0 | [`v2.1.0`](https://github.com/chainguard-actions/michidk-run-komac/tree/v2.1.0) | [`9b27ead`](https://github.com/michidk/run-komac/commit/9b27eadc6e9235c252444a437d246c139da2f57f) |
 
 ## Privacy
 
