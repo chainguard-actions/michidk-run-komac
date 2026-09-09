@@ -1,0 +1,51 @@
+name: Test no custom environment variables when inputs are empty
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Pre-install fake komac so action skips install and uses our stub
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          cat > "$HOME/.local/bin/komac" << 'EOF'
+          #!/bin/sh
+          echo "fake komac called with: $*"
+          exit 0
+          EOF
+          chmod +x "$HOME/.local/bin/komac"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - id: action
+        uses: .
+        with:
+          args: '--version'
+
+      - name: Assert KOMAC_FORK_OWNER is not set
+        run: |
+          echo "KOMAC_FORK_OWNER: '${KOMAC_FORK_OWNER}'"
+          if [ -n "${KOMAC_FORK_OWNER}" ]; then
+            echo "FAIL: expected KOMAC_FORK_OWNER to be unset, got '${KOMAC_FORK_OWNER}'"
+            exit 1
+          fi
+          echo "PASS: KOMAC_FORK_OWNER is not set"
+
+      - name: Assert KOMAC_CREATED_WITH is not set
+        run: |
+          echo "KOMAC_CREATED_WITH: '${KOMAC_CREATED_WITH}'"
+          if [ -n "${KOMAC_CREATED_WITH}" ]; then
+            echo "FAIL: expected KOMAC_CREATED_WITH to be unset, got '${KOMAC_CREATED_WITH}'"
+            exit 1
+          fi
+          echo "PASS: KOMAC_CREATED_WITH is not set"
+
+      - name: Assert KOMAC_CREATED_WITH_URL is not set
+        run: |
+          echo "KOMAC_CREATED_WITH_URL: '${KOMAC_CREATED_WITH_URL}'"
+          if [ -n "${KOMAC_CREATED_WITH_URL}" ]; then
+            echo "FAIL: expected KOMAC_CREATED_WITH_URL to be unset, got '${KOMAC_CREATED_WITH_URL}'"
+            exit 1
+          fi
+          echo "PASS: KOMAC_CREATED_WITH_URL is not set"

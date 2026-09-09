@@ -1,0 +1,64 @@
+name: Test custom environment variables are set
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Pre-install fake komac so action skips install and uses our stub
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          cat > "$HOME/.local/bin/komac" << 'EOF'
+          #!/bin/sh
+          echo "fake komac called with: $*"
+          # Print env vars so we can verify them
+          echo "KOMAC_FORK_OWNER=${KOMAC_FORK_OWNER}"
+          echo "KOMAC_CREATED_WITH=${KOMAC_CREATED_WITH}"
+          echo "KOMAC_CREATED_WITH_URL=${KOMAC_CREATED_WITH_URL}"
+          exit 0
+          EOF
+          chmod +x "$HOME/.local/bin/komac"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - id: action
+        uses: .
+        with:
+          args: '--version'
+          custom-fork-owner: 'my-fork-owner'
+          custom-tool: 'MyTool'
+          custom-tool-url: 'https://example.com/mytool'
+
+      - name: Assert KOMAC_FORK_OWNER was set
+        env:
+          FORK_OWNER: ${{ env.KOMAC_FORK_OWNER }}
+        run: |
+          echo "KOMAC_FORK_OWNER: $FORK_OWNER"
+          if [ "$FORK_OWNER" != "my-fork-owner" ]; then
+            echo "FAIL: expected KOMAC_FORK_OWNER='my-fork-owner', got '$FORK_OWNER'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert KOMAC_CREATED_WITH was set
+        env:
+          CREATED_WITH: ${{ env.KOMAC_CREATED_WITH }}
+        run: |
+          echo "KOMAC_CREATED_WITH: $CREATED_WITH"
+          if [ "$CREATED_WITH" != "MyTool" ]; then
+            echo "FAIL: expected KOMAC_CREATED_WITH='MyTool', got '$CREATED_WITH'"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert KOMAC_CREATED_WITH_URL was set
+        env:
+          CREATED_WITH_URL: ${{ env.KOMAC_CREATED_WITH_URL }}
+        run: |
+          echo "KOMAC_CREATED_WITH_URL: $CREATED_WITH_URL"
+          if [ "$CREATED_WITH_URL" != "https://example.com/mytool" ]; then
+            echo "FAIL: expected KOMAC_CREATED_WITH_URL='https://example.com/mytool', got '$CREATED_WITH_URL'"
+            exit 1
+          fi
+          echo "PASS"

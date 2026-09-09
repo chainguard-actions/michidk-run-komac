@@ -1,0 +1,23 @@
+name: Test Action
+on: [push]
+
+permissions: {}
+
+jobs:
+  test:
+    name: Print Komac Version (${{ matrix.version }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        version:
+          - latest
+          - 2.6.0
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+    - name: Run Komac
+      uses: ./
+      with:
+        komac-version: ${{ matrix.version }}
+        args: '--version'
