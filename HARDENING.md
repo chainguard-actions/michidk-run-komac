@@ -14,53 +14,44 @@ Action **michidk--run-komac/v2.1.0** was hardened automatically. 12 finding(s) w
 
 ## Findings Fixed
 
-### script-injection (severity: high)
+### unpinned-uses (severity: high)
 
-Multiple `${{ inputs.* }}` expressions are interpolated directly inside `run:` shell command strings, violating rule (a). An attacker controlling these inputs can inject arbitrary shell commands.
-
-- Line 47: `if [ "${{ inputs.komac-version }}" == 'latest' ]; then` — direct expression in run block
-- Line 49: `cargo binstall komac@${{ inputs.komac-version }} -y` — direct expression, also unquoted (rule b)
-- Line 54: `if [[ -n "${{ inputs.custom-fork-owner }}" ]]; then` — direct expression in run block
-- Line 55: `echo "KOMAC_FORK_OWNER=${{ inputs.custom-fork-owner }}" >> $GITHUB_ENV` — direct expression in run block
-- Line 57: `if [[ -n "${{ inputs.custom-tool }}" ]]; then` — direct expression in run block
-- Line 58: `echo "KOMAC_CREATED_WITH=${{ inputs.custom-tool }}" >> $GITHUB_ENV` — direct expression in run block
-- Line 60: `if [[ -n "${{ inputs.custom-tool-url }}" ]]; then` — direct expression in run block
-- Line 61: `echo "KOMAC_CREATED_WITH_URL=${{ inputs.custom-tool-url }}" >> $GITHUB_ENV` — direct expression in run block
-- Line 65: `run: komac ${{ inputs.args }}` — direct expression in run block, completely unquoted
+The action uses `cargo-bins/cargo-binstall@main`, which is pinned to a mutable branch name rather than an immutable 40-character commit SHA. This means the referenced action can be silently changed by the upstream repository at any time, enabling supply-chain attacks.
 
 Locations:
 
+- `action.yml:36`
+
+### script-injection (severity: high)
+
+Multiple `run:` blocks directly interpolate `${{ inputs.* }}` expressions into shell command strings (sub-rule a), allowing an attacker who controls those inputs to inject arbitrary shell commands.
+
+1. "Install Komac" step (line 40): `if [ "${{ inputs.komac-version }}" == 'latest' ]` — direct expression interpolation in a shell conditional.
+2. "Install Komac" step (line 42): `cargo binstall komac@${{ inputs.komac-version }} -y` — direct, unquoted interpolation into a shell command.
+3. "Set Custom Environment Variables" step (lines 47–55): `${{ inputs.custom-fork-owner }}`, `${{ inputs.custom-tool }}`, and `${{ inputs.custom-tool-url }}` are interpolated directly into `[[ -n "..." ]]` guards and `echo` commands.
+4. "Run Komac" step (line 58): `komac ${{ inputs.args }}` — direct, unquoted interpolation of a required input into a shell command, giving full shell command injection to any caller.
+
+Locations:
+
+- `action.yml:40`
+- `action.yml:42`
 - `action.yml:47`
-- `action.yml:49`
-- `action.yml:54`
-- `action.yml:55`
-- `action.yml:57`
 - `action.yml:58`
-- `action.yml:60`
-- `action.yml:61`
-- `action.yml:65`
 
 ### github-env-injection (severity: high)
 
-Three `run:` steps write `${{ inputs.* }}` values directly into `$GITHUB_ENV` without the required sanitization step (`printf '%s' ... | tr -d '\n\r'`). A newline character in any of these inputs can inject arbitrary environment variables into subsequent steps.
+The "Set Custom Environment Variables" step writes `inputs.*` values directly to `$GITHUB_ENV` without the required sanitization step (`printf '%s' "$VAR" | tr -d '\n\r'`). An attacker-controlled input containing newlines can inject arbitrary environment variable definitions (e.g. `ACTIONS_RUNTIME_TOKEN=...`) into the runner environment for all subsequent steps.
 
-- Line 55: `echo "KOMAC_FORK_OWNER=${{ inputs.custom-fork-owner }}" >> $GITHUB_ENV`
-- Line 58: `echo "KOMAC_CREATED_WITH=${{ inputs.custom-tool }}" >> $GITHUB_ENV`
-- Line 61: `echo "KOMAC_CREATED_WITH_URL=${{ inputs.custom-tool-url }}" >> $GITHUB_ENV`
+Affected writes:
+- `echo "KOMAC_FORK_OWNER=${{ inputs.custom-fork-owner }}" >> $GITHUB_ENV`
+- `echo "KOMAC_CREATED_WITH=${{ inputs.custom-tool }}" >> $GITHUB_ENV`
+- `echo "KOMAC_CREATED_WITH_URL=${{ inputs.custom-tool-url }}" >> $GITHUB_ENV`
 
 Locations:
 
+- `action.yml:49`
+- `action.yml:52`
 - `action.yml:55`
-- `action.yml:58`
-- `action.yml:61`
-
-### unpinned-uses (severity: high)
-
-The step 'Install binstall' uses `cargo-bins/cargo-binstall@main`, which is pinned to a mutable branch name rather than an immutable 40-character commit SHA. This means the action can be silently updated to a malicious version without any change to this file, creating a supply-chain attack risk.
-
-Locations:
-
-- `action.yml:41`
 
 ### static-inline-injection (severity: high)
 
@@ -138,13 +129,13 @@ Locations:
 
 ### Iteration 1
 
-**Fixes applied:** unpinned-uses, script-injection, static-inline-injection, github-env-injection
+**Fixes applied:** unpinned-uses, script-injection, github-env-injection, static-inline-injection
 
 **Notes:**
 
-Fixed all 12 findings in action.yml:
-1. Pinned cargo-bins/cargo-binstall@main to full SHA b874e25ea559687bec77e281e9b271aa1367b624.
-2. Moved all ${{ inputs.* }} expressions from run: blocks into env: maps (komac-version→KOMAC_VERSION, custom-fork-owner→CUSTOM_FORK_OWNER, custom-tool→CUSTOM_TOOL, custom-tool-url→CUSTOM_TOOL_URL, args→INPUT_ARGS).
-3. Sanitized all three GITHUB_ENV writes using printf '%s' | tr -d '\n\r' to prevent newline injection.
-4. Handled inputs.args as a whitespace-separated argument list using the xargs/while-read-NUL bash array tokenization pattern to preserve argument boundaries without injection risk.
+Fixed all findings in hardened/action/action.yml:
+1. Pinned cargo-bins/cargo-binstall@main to SHA f8162f41a8ea5ec653c5cba967cc1b2d89c867c5.
+2. Moved all ${{ inputs.* }} expressions to env: blocks: komac-version→KOMAC_VERSION, custom-fork-owner→CUSTOM_FORK_OWNER, custom-tool→CUSTOM_TOOL, custom-tool-url→CUSTOM_TOOL_URL, args→INPUT_ARGS.
+3. Sanitized all three GITHUB_ENV writes with printf '%s' | tr -d '\n\r' to prevent newline injection.
+4. Used xargs-based bash array tokenization for inputs.args to properly split the argument list while preserving argument boundaries.
 
